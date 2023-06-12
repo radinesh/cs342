@@ -12,7 +12,7 @@ VALID_PATH = "data/valid"
 
 def train(args):
     model = model_factory[args.model]()
-
+    model.to(device)
     """
     Your code here
 
@@ -61,8 +61,8 @@ def train(args):
         avg_v_loss = v_loss / len(valid_loader)
         avg_t_acc = t_acc / len(train_loader)
         avg_v_acc = v_acc / len(valid_loader)
-        print(f'at epoch: {epoch} average train loss  and accuracy is {avg_t_loss, avg_t_acc} \n')
-        print(f'at epoch: {epoch} average validation loss  and accuracy is {avg_v_loss, avg_v_acc} \n')
+        #print(f'at epoch: {epoch} average train loss  and accuracy is {avg_t_loss, avg_t_acc} \n')
+        #print(f'at epoch: {epoch} average validation loss  and accuracy is {avg_v_loss, avg_v_acc} \n')
 
         if avg_v_loss < best_valid_loss:
             best_valid_loss = avg_v_loss
@@ -77,21 +77,6 @@ def train(args):
         test_acc_hist.append(avg_v_acc)
     # raise NotImplementedError('train')
     # save_model(model)
-    import matplotlib.pyplot as plt
-
-    plt.plot(train_loss_hist, label="train")
-    plt.plot(test_loss_hist, label="test")
-    plt.xlabel("epochs")
-    plt.ylabel("cross entropy")
-    plt.legend()
-    plt.show()
-
-    plt.plot(train_acc_hist, label="train")
-    plt.plot(test_acc_hist, label="test")
-    plt.xlabel("epochs")
-    plt.ylabel("accuracy")
-    plt.legend()
-
 
 if __name__ == '__main__':
     import argparse
@@ -102,7 +87,7 @@ if __name__ == '__main__':
     # Put custom arguments here
     parser.add_argument('-b', '--batch_size', type=int, default=28)
     parser.add_argument('-s', '--manual_seed', type=int, default=42)
-    parser.add_argument('-ne', '--num_epochs', type=int, default=100)
+    parser.add_argument('-ne', '--num_epochs', type=int, default=90)
     parser.add_argument('-l', '--learning_rate', type=float, default=0.001)
     parser.add_argument('-w', '--weight_decay', type=float, default=1e-5)
     parser.add_argument('-p', '--save_path', type=str, default='linear_model.pth')
