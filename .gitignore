@@ -10,3 +10,5 @@ ehthumbs.db
 Thumbs.db
 .idea
 homework1/homework/__pycache__
+homework1/grader/__pycache__
+homework1/homework/*.th

@@ -3,6 +3,10 @@ import torch.nn.functional as F
 
 
 class ClassificationLoss(torch.nn.Module):
+    def __init__(self):
+        super(ClassificationLoss, self).__init__()
+        self.ls = torch.nn.CrossEntropyLoss()
+
     def forward(self, input, target):
         """
         Your code here
@@ -16,7 +20,9 @@ class ClassificationLoss(torch.nn.Module):
 
         Hint: Don't be too fancy, this is a one-liner
         """
-        raise NotImplementedError('ClassificationLoss.forward')
+        loss = self.ls(input, target)
+        return loss
+        # raise NotImplementedError('ClassificationLoss.forward')
 
 
 class LinearClassifier(torch.nn.Module):
@@ -31,7 +37,7 @@ class LinearClassifier(torch.nn.Module):
         # raise NotImplementedError('LinearClassifier.__init__')
 
 
-def forward(self, x):
+    def forward(self, x):
         """
         Your code here
 
