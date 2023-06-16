@@ -70,7 +70,7 @@ def train(args):
         if avg_v_acc > best_acc:
             best_acc = avg_v_acc
             save_model(model)
-        print(f'at epoch: {epoch} best loss and accuracy is {best_valid_loss, best_acc} \n')
+        #print(f'at epoch: {epoch} best loss and accuracy is {best_valid_loss, best_acc} \n')
         train_loss_hist.append(avg_t_loss)
         train_acc_hist.append(avg_t_acc)
         test_loss_hist.append(avg_v_loss)
