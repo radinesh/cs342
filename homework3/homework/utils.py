@@ -3,7 +3,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torchvision.transforms import functional as F
-
+import csv
 from . import dense_transforms
 
 LABEL_NAMES = ['background', 'kart', 'pickup', 'nitro', 'bomb', 'projectile']
@@ -22,19 +22,37 @@ class SuperTuxDataset(Dataset):
         Hint: Do not store torch.Tensor's as data here, but use PIL images, torchvision.transforms expects PIL images
               for most transformations.
         """
-        raise NotImplementedError('SuperTuxDataset.__init__')
+        self.csv_data = []
+        self.data_path = dataset_path
+        level_file_path = dataset_path + '/labels.csv'
+        with open(level_file_path, newline='') as csv_file:
+            reader_d = csv.DictReader(csv_file)
+            for row in reader_d:
+                self.csv_data.append(row)
+        # print(self.csv_data)
+        # raise NotImplementedError('SuperTuxDataset.__init__')
 
     def __len__(self):
         """
         Your code here
         """
-        raise NotImplementedError('SuperTuxDataset.__len__')
+        return len(self.csv_data)
+        # raise NotImplementedError('SuperTuxDataset.__len__')
 
     def __getitem__(self, idx):
         """
         Your code here
         """
-        raise NotImplementedError('SuperTuxDataset.__getitem__')
+        data = self.csv_data[idx]
+        image_path = self.data_path + '/' + data['file']
+        label = LABEL_NAMES.index(data['label'])
+        # Read the image
+        image = Image.open(image_path)
+        # Define a transform to convert the image to tensor
+        transform = transforms.ToTensor()
+        # Convert the image to PyTorch tensor
+        img = transform(image)
+        # raise NotImplementedError('SuperTuxDataset.__getitem__')
         return img, label
 
 
@@ -72,6 +90,9 @@ def load_dense_data(dataset_path, num_workers=0, batch_size=32, **kwargs):
 def _one_hot(x, n):
     return (x.view(-1, 1) == torch.arange(n, dtype=x.dtype, device=x.device)).int()
 
+def accuracy(outputs, labels):
+    outputs_idx = outputs.max(1)[1].type_as(labels)
+    return outputs_idx.eq(labels).float().mean()
 
 class ConfusionMatrix(object):
     def _make(self, preds, labels):
