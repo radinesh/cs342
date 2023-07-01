@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 
+
 class ClassificationLoss(torch.nn.Module):
     def __init__(self):
         super(ClassificationLoss, self).__init__()
@@ -22,8 +23,10 @@ class ClassificationLoss(torch.nn.Module):
         loss = self.ls(input, target)
         return loss
         # raise NotImplementedError('ClassificationLoss.forward')
+
+
 class CNNClassifier(torch.nn.Module):
-    def __init__(self, layers=None, n_input_channels=3, kernel_size=3, stride=1, img_size=64*16*16, label=6):
+    def __init__(self, layers=None, n_input_channels=3, kernel_size=3, stride=1, img_size=64 * 16 * 16, label=6):
         super().__init__()
         """
         Your code here
@@ -48,7 +51,7 @@ class CNNClassifier(torch.nn.Module):
         self.c_layers = torch.nn.Sequential(*C)
 
         # raise NotImplementedError('CNNClassifier.__init__')
-        
+
     def forward(self, x):
         """
         Your code here
@@ -59,13 +62,14 @@ class CNNClassifier(torch.nn.Module):
         x = self.f_layers(x)
         x = x.view(x.size(0), -1)
         # print(x)
-        #print(x.shape)
+        # print(x.shape)
         x = self.c_layers(x)
         return x
 
+
 class FCN(torch.nn.Module):
     def __init__(self):
-        super().__init__()
+        super(FCN, self).__init__()
         """
         Your code here.
         Hint: The FCN can be a bit smaller the the CNNClassifier since you need to run it at a higher resolution
@@ -74,7 +78,26 @@ class FCN(torch.nn.Module):
         Hint: Use residual connections
         Hint: Always pad by kernel_size / 2, use an odd kernel_size
         """
-        raise NotImplementedError('FCN.__init__')
+        # Encoder
+        self.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, padding=1)
+        self.conv2 = torch.nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv3 = torch.nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.conv4 = torch.nn.Conv2d(256, 512, kernel_size=3, padding=1)
+
+        # Decoder
+        self.deconv4 = torch.nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1)
+        self.deconv3 = torch.nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1)
+        self.deconv2 = torch.nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)
+        self.deconv1 = torch.nn.ConvTranspose2d(64, 5, kernel_size=4, stride=2, padding=1)
+
+        # Skip connections
+        self.skip1 = torch.nn.Conv2d(64, 64, kernel_size=1)
+        self.skip2 = torch.nn.Conv2d(128, 128, kernel_size=1)
+        self.skip3 = torch.nn.Conv2d(256, 256, kernel_size=1)
+
+        # Activation function
+        self.relu = torch.nn.ReLU()
+        # raise NotImplementedError('FCN.__init__')
 
     def forward(self, x):
         """
@@ -86,8 +109,39 @@ class FCN(torch.nn.Module):
               if required (use z = z[:, :, :H, :W], where H and W are the height and width of a corresponding strided
               convolution
         """
-        raise NotImplementedError('FCN.forward')
+        x1 = self.relu(self.conv1(x))
+        x2 = self.relu(self.conv2(x1))
+        x3 = self.relu(self.conv3(x2))
+        x4 = self.relu(self.conv4(x3))
+        # Decoder
+        d4 = self.deconv4(x4)
+        d3 = self.deconv3(d4)
+        d2 = self.deconv2(d3)
+        d1 = self.deconv1(d2)
 
+        # Crop or pad the output to match the input size
+        _, _, h, w = x.size()
+        _, _, dh, dw = d1.size()
+
+        if h != dh or w != dw:
+            crop_h = (dh - h) // 2
+            crop_w = (dw - w) // 2
+            d1 = d1[:, :, crop_h:crop_h + h, crop_w:crop_w + w]
+
+        return d1
+
+        # raise NotImplementedError('FCN.forward')
+
+    def crop_and_concat(self, x1, x2):
+        diff_h = x2.size()[2] - x1.size()[2]
+        diff_w = x2.size()[3] - x1.size()[3]
+
+        # Crop x2 if necessary
+        if diff_h != 0 or diff_w != 0:
+            x2 = x2[:, :, :x1.size()[2], :x1.size()[3]]
+
+        # Concatenate x1 and x2
+        return torch.cat((x2, x1), dim=1)
 
 model_factory = {
     'cnn': CNNClassifier,

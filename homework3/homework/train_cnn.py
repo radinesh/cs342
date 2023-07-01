@@ -1,4 +1,4 @@
-from .models import CNNClassifier,ClassificationLoss, save_model
+from .models import CNNClassifier, ClassificationLoss, save_model
 from .utils import accuracy, load_data
 import torch
 import torch.utils.tensorboard as tb
@@ -28,8 +28,6 @@ def train(args):
     loss_fn = ClassificationLoss()
     optimizer = optim.Adam(model.parameters(),
                            betas=(0.9, 0.999), lr=args.learning_rate, eps=1e-08, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [50, 75], gamma=0.1)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
     for epoch in range(args.num_epochs):
         print(f'going to process epoch {epoch} from total epoch {args.num_epochs}')
@@ -89,8 +87,6 @@ def train(args):
 
 if __name__ == '__main__':
     import argparse
-
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_dir',type=str, default='./ccnLogs')
     # Put custom arguments here
