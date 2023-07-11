@@ -16,19 +16,12 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     """
     # Apply max pooling to find local maxima
     # Convert the input heatmap to an order-4 tensor and move it to the GPU if available
+    heatmap = heatmap.to(device)
     heatmap_tensor = heatmap[None, None]
-    heatmap_tensor=heatmap_tensor.to(device)
     pooled = F.max_pool2d(heatmap_tensor, kernel_size=max_pool_ks, stride=1, padding=max_pool_ks // 2)
-    pooled = pooled.to(device)
     maxima = (heatmap == pooled) & (heatmap > min_score)
-    maxima = maxima.to(device)
     # Find the coordinates of the local maxima
     maxima_2d = maxima.squeeze().nonzero(as_tuple=False)
-    if torch.is_tensor(maxima_2d):
-        print("Variable maxima_2d is a tensor.")
-        maxima_2d.to(device)
-    else:
-        print("Variable maxima_2d is not a tensor.")
     scores = heatmap[maxima_2d[:, 0], maxima_2d[:, 1]]
 
     # Sort the peaks by score in descending order
