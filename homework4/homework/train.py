@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from .models import Detector, save_model
-from .utils import load_detection_data,ConfusionMatrix
+from .utils import load_detection_data, ConfusionMatrix
 from . import dense_transforms
 import torch.utils.tensorboard as tb
 import torch.backends.cudnn as cudnn
@@ -22,7 +22,7 @@ def train(args):
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = Detector().to(device)
     if args.continue_training:
-            model.load_state_dict(torch.load(path.join(path.dirname(path.abspath(__file__)), 'detector.th')))
+        model.load_state_dict(torch.load(path.join(path.dirname(path.abspath(__file__)), 'detector.th')))
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-3)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
@@ -76,9 +76,9 @@ def train(args):
 
         if valid_logger is None or train_logger is None:
             print('epoch %-3d \t acc = %0.3f \t val acc = %0.3f \t iou = %0.3f \t val iou = %0.3f' %
-                    (epoch, conf.global_accuracy, val_conf.global_accuracy, conf.iou, val_conf.iou))
+                  (epoch, conf.global_accuracy, val_conf.global_accuracy, conf.iou, val_conf.iou))
         save_model(model)
-    #raise NotImplementedError('train')
+    # raise NotImplementedError('train')
 
 
 def log(logger, imgs, gt_det, det, global_step):
@@ -93,13 +93,20 @@ def log(logger, imgs, gt_det, det, global_step):
     logger.add_images('label', gt_det[:16], global_step)
     logger.add_images('pred', torch.sigmoid(det[:16]), global_step)
 
+
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-
-    parser.add_argument('--log_dir')
+    parser.add_argument('--log_dir', type=str, default='./dthLogs')
     # Put custom arguments here
+    parser.add_argument('-n', '--num_epoch', type=int, default=20)
+    parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3)
+    parser.add_argument('-g', '--gamma', type=float, default=0, help="class dependent weight for cross entropy")
+    parser.add_argument('-c', '--continue_training', action='store_true')
+    parser.add_argument('-t', '--transform',
+                        default='Compose([ColorJitter(0.9, 0.9, 0.9, 0.1), RandomHorizontalFlip(), ToTensor(),'
+                                'ToHeatmap()])')
 
     args = parser.parse_args()
     train(args)
