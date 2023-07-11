@@ -18,6 +18,7 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     # Convert the input heatmap to an order-4 tensor and move it to the GPU if available
     heatmap_tensor = heatmap[None, None].to(device)
     pooled = F.max_pool2d(heatmap_tensor, kernel_size=max_pool_ks, stride=1, padding=max_pool_ks // 2)
+    pooled = pooled.to(device)
     maxima = (heatmap == pooled) & (heatmap > min_score)
     # Find the coordinates of the local maxima
     maxima_2d = maxima.squeeze().nonzero(as_tuple=False)
