@@ -36,6 +36,7 @@ def train(args):
     cudnn.benchmark = True
     global_step = 0
     for epoch in range(args.num_epoch):
+        print("Going to process epoch: ", epoch)
         if 1 <= epoch <= 100:
             optimizer.param_groups[0]['lr'] = 0.01  # High learning rate for GT detect loss
         elif 100 < epoch <= 120:
@@ -48,6 +49,7 @@ def train(args):
             logit = model(img)
             #loss_val = loss(logit, gt_detect)
             # Calculate loss based on the condition
+            print(f'logit.shape {logit.shape} and gt_detect.shape {gt_detect.shape} gt_size shape {gt_size.shape}' )
             if epoch <= 100:
                 loss_val = loss(logit, gt_detect)
             else:

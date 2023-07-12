@@ -69,7 +69,7 @@ class Detector(torch.nn.Module):
         def forward(self, x):
             return F.relu(self.c1(x))
 
-    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=5, kernel_size=3, use_skip=True):
+    def __init__(self, layers=[16, 32, 64, 128], n_output_channels=3, kernel_size=3, use_skip=True):
         super().__init__()
         """
          Your code here.
@@ -113,7 +113,9 @@ class Detector(torch.nn.Module):
             # Add the skip connection
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
-        return self.classifier(z)
+        logits = self.classifier(z)
+        print(f'logits {logits}')
+        return logits
         # raise NotImplementedError('Detector.forward')
 
     def detect(self, image):
