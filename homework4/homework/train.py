@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .models import Detector, save_model
+from .models import Detector, save_model,CustomBCEWithLogitsLoss
 from .utils import load_detection_data, ConfusionMatrix,get_pos_weight_from_data
 from . import dense_transforms
 import torch.utils.tensorboard as tb
@@ -27,7 +27,7 @@ def train(args):
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-3)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
     w = get_pos_weight_from_data()
-    loss = torch.nn.BCEWithLogitsLoss(pos_weight=w).to(device)
+    loss = CustomBCEWithLogitsLoss(pos_weight=w).to(device)
 
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
@@ -49,7 +49,7 @@ def train(args):
             logit = model(img)
             #loss_val = loss(logit, gt_detect)
             # Calculate loss based on the condition
-            print(f'logit.shape {logit.shape} and gt_detect.shape {gt_detect.shape} gt_size shape {gt_size.shape}' )
+            print(f'logit.shape {logit.shape} and gt_detect.shape {gt_detect.shape} gt_size shape {gt_size.shape}')
             if epoch <= 100:
                 loss_val = loss(logit, gt_detect)
             else:

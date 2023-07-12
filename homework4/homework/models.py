@@ -1,8 +1,25 @@
 import torch
+import torch.nn
 import torch.nn.functional as F
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+
+class CustomBCEWithLogitsLoss(torch.nn.Module):
+    def __init__(self, pos_weight=None, reduction='mean'):
+        super(CustomBCEWithLogitsLoss, self).__init__()
+        self.pos_weight = pos_weight
+        self.reduction = reduction
+
+    def forward(self, input, target):
+        input = input.view(input.size(0), -1)  # Flatten the input logits
+        target = target.view(target.size(0), -1)  # Flatten the target tensor
+
+        # Apply sigmoid to the input logits
+        input = torch.sigmoid(input)
+        print(f'input.shape {input.shape} and target.shape {target.shape}')
+        loss = F.binary_cross_entropy(input, target, pos_weight=self.pos_weight, reduction=self.reduction)
+        return loss
 
 def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     """
