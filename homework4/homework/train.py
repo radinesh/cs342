@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from .models import Detector, save_model
-from .utils import load_detection_data, ConfusionMatrix
+from .utils import load_detection_data, ConfusionMatrix,get_pos_weight_from_data
 from . import dense_transforms
 import torch.utils.tensorboard as tb
 import torch.backends.cudnn as cudnn
@@ -22,12 +22,12 @@ def train(args):
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model = Detector().to(device)
     if args.continue_training:
-        model.load_state_dict(torch.load(path.join(path.dirname(path.abspath(__file__)), 'detector.th')))
+        model.load_state_dict(torch.load(path.join(path.dirname(path.abspath(__file__)), 'det.th')))
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-3)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
-    # w = torch.as_tensor(DENSE_CLASS_DISTRIBUTION) ** (-args.gamma)
-    loss = torch.nn.BCEWithLogitsLoss().to(device)
+    w = get_pos_weight_from_data()
+    loss = torch.nn.BCEWithLogitsLoss(pos_weight=w).to(device)
 
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
@@ -36,18 +36,28 @@ def train(args):
     cudnn.benchmark = True
     global_step = 0
     for epoch in range(args.num_epoch):
+        if 1 <= epoch <= 100:
+            optimizer.param_groups[0]['lr'] = 0.01  # High learning rate for GT detect loss
+        elif 100 < epoch <= 120:
+            optimizer.param_groups[0]['lr'] = 0.001  # Low learning rate for GT size loss
+
         model.train()
         conf = ConfusionMatrix()
-        for img, label in train_data:
-            img, label = img.to(device), label.to(device).long()
+        for img, gt_detect, gt_size in train_data:
+            img, gt_detect, gt_size = img.to(device), gt_detect.to(device), gt_size.to(device)
             logit = model(img)
-            loss_val = loss(logit, label)
+            #loss_val = loss(logit, gt_detect)
+            # Calculate loss based on the condition
+            if epoch <= 100:
+                loss_val = loss(logit, gt_detect)
+            else:
+                loss_val = loss(logit, gt_size)
             if train_logger is not None and global_step % 100 == 0:
-                log(train_logger, img, label, logit, global_step)
+                log(train_logger, img, gt_detect, logit, global_step)
 
             if train_logger is not None:
                 train_logger.add_scalar('loss', loss_val, global_step)
-            conf.add(logit.argmax(1), label)
+            conf.add(logit.argmax(1), gt_detect)
 
             optimizer.zero_grad()
             loss_val.backward()
@@ -61,13 +71,13 @@ def train(args):
 
         model.eval()
         val_conf = ConfusionMatrix()
-        for img, label in valid_data:
-            img, label = img.to(device), label.to(device).long()
+        for img, gt_detect, gt_size in valid_data:
+            img, gt_detect, gt_size = img.to(device), gt_detect.to(device), gt_size.to(device)
             logit = model(img)
-            val_conf.add(logit.argmax(1), label)
+            val_conf.add(logit.argmax(1), gt_detect)
 
         if valid_logger is not None:
-            log(valid_logger, img, label, logit, global_step)
+            log(valid_logger, img, gt_detect, logit, global_step)
 
         if valid_logger:
             valid_logger.add_scalar('global_accuracy', val_conf.global_accuracy, global_step)
