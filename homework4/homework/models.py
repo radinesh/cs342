@@ -7,18 +7,16 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 class CustomBCEWithLogitsLoss(torch.nn.Module):
     def __init__(self, pos_weight=None, reduction='mean'):
-        super(CustomBCEWithLogitsLoss, self).__init__()
+        super().__init__()
         self.pos_weight = pos_weight
         self.reduction = reduction
 
     def forward(self, input, target):
-        input = input.view(input.size(0), -1)  # Flatten the input logits
-        target = target.view(target.size(0), -1)  # Flatten the target tensor
+        input = input.flatten(start_dim=2)  # Flatten logits tensor
+        target = target.flatten(start_dim=2)  # Flatten target tensor
+        print(f'after sigmoid input shape {input.shape},target shape {target.shape}')
 
-        # Apply sigmoid to the input logits
-        input = torch.sigmoid(input)
-        print(f'input.shape {input.shape} and target.shape {target.shape}')
-        loss = F.binary_cross_entropy(input, target, pos_weight=self.pos_weight, reduction=self.reduction)
+        loss = F.binary_cross_entropy_with_logits(input, target, pos_weight=self.pos_weight, reduction=self.reduction)
         return loss
 
 def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
@@ -131,7 +129,7 @@ class Detector(torch.nn.Module):
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
         logits = self.classifier(z)
-        print(f'logits {logits}')
+        print(f'logits shape {logits.shape}')
         return logits
         # raise NotImplementedError('Detector.forward')
 
