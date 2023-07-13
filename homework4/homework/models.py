@@ -106,6 +106,7 @@ class Detector(torch.nn.Module):
             if self.use_skip:
                 c += skip_layer_size[i]
         self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
+        self.bbox_predictor = torch.nn.Conv2d(c, n_output_channels * 4, 1)  # 4 coordinates for each class
         # raise NotImplementedError('Detector.__init__')
 
     def forward(self, x):
@@ -129,8 +130,9 @@ class Detector(torch.nn.Module):
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
         logits = self.classifier(z)
-        print(f'logits shape {logits.shape}')
-        return logits
+        bounding_boxes=self.bbox_predictor(z)
+        print(f'logits shape {logits.shape},bounding_boxes {bounding_boxes.shape}')
+        return logits,bounding_boxes
         # raise NotImplementedError('Detector.forward')
 
     def detect(self, image):
