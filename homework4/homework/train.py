@@ -49,9 +49,9 @@ def train(args):
             logit = model(img)
             #loss_val = loss(logit, gt_detect)
             # Calculate loss based on the condition
-            print(f'logit.shape {logit.shape} and gt_detect.shape {gt_detect.shape} gt_size shape {gt_size.shape}')
+            print(f'logit.shape {logit[0].shape} and gt_detect.shape {gt_detect.shape} gt_size shape {gt_size.shape}')
             if epoch <= 100:
-                loss_val = loss(logit, gt_detect)
+                loss_val = loss(logit[0], gt_detect)
             else:
                 loss_val = loss(logit, gt_size)
             if train_logger is not None and global_step % 100 == 0:

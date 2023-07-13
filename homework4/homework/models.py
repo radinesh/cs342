@@ -105,7 +105,7 @@ class Detector(torch.nn.Module):
             c = l
             if self.use_skip:
                 c += skip_layer_size[i]
-        self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
+        self.pool = torch.nn.MaxPool2d(1)
         self.bbox_predictor = torch.nn.Conv2d(c, n_output_channels * 4, 1)  # 4 coordinates for each class
         # raise NotImplementedError('Detector.__init__')
 
@@ -129,7 +129,7 @@ class Detector(torch.nn.Module):
             # Add the skip connection
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
-        logits = self.classifier(z)
+        logits = self.pool(z)
         bounding_boxes=self.bbox_predictor(z)
         print(f'logits shape {logits.shape},bounding_boxes {bounding_boxes.shape}')
         return logits,bounding_boxes
