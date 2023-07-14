@@ -1,23 +1,8 @@
 import torch
-import torch.nn
 import torch.nn.functional as F
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-
-class CustomBCEWithLogitsLoss(torch.nn.Module):
-    def __init__(self, pos_weight=None, reduction='mean'):
-        super().__init__()
-        self.pos_weight = pos_weight
-        self.reduction = reduction
-
-    def forward(self, input, target):
-        input = input.flatten(start_dim=2)  # Flatten logits tensor
-        target = target.flatten(start_dim=2)  # Flatten target tensor
-        print(f'after sigmoid input shape {input.shape},target shape {target.shape}')
-
-        loss = F.binary_cross_entropy_with_logits(input, target, pos_weight=self.pos_weight, reduction=self.reduction)
-        return loss
 
 def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     """
@@ -29,8 +14,6 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
        @return: List of peaks [(score, cx, cy), ...], where cx, cy are the position of a peak and score is the
                 heatmap value at the peak. Return no more than max_det peaks per image
     """
-    # Apply max pooling to find local maxima
-    # Convert the input heatmap to an order-4 tensor and move it to the GPU if available
     heatmap = heatmap.to(device)
     heatmap_tensor = heatmap[None, None]
     pooled = F.max_pool2d(heatmap_tensor, kernel_size=max_pool_ks, stride=1, padding=max_pool_ks // 2)
@@ -56,6 +39,7 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     peaks = [(score.item(), cx.item(), cy.item()) for score, cx, cy in zip(sorted_scores, sorted_xs, sorted_ys)]
 
     return peaks
+    # raise NotImplementedError('extract_peak')
     # raise NotImplementedError('extract_peak')
 
 
@@ -86,10 +70,6 @@ class Detector(torch.nn.Module):
 
     def __init__(self, layers=[16, 32, 64, 128], n_output_channels=3, kernel_size=3, use_skip=True):
         super().__init__()
-        """
-         Your code here.
-         Setup your detection network
-        """
         self.input_mean = torch.Tensor([0.2788, 0.2657, 0.2629])
         self.input_std = torch.Tensor([0.2064, 0.1944, 0.2252])
 
@@ -105,16 +85,9 @@ class Detector(torch.nn.Module):
             c = l
             if self.use_skip:
                 c += skip_layer_size[i]
-        self.pool = torch.nn.MaxPool2d(1)
-        self.bbox_predictor = torch.nn.Conv2d(c, n_output_channels * 4, 1)  # 4 coordinates for each class
-        # raise NotImplementedError('Detector.__init__')
+        self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
 
     def forward(self, x):
-        """
-        Your code here.
-        Implement a forward pass through the network, use forward for training,
-        and detect for detection
-        """
         z = (x - self.input_mean[None, :, None, None].to(x.device)) / self.input_std[None, :, None, None].to(x.device)
         up_activation = []
         for i in range(self.n_conv):
@@ -129,11 +102,7 @@ class Detector(torch.nn.Module):
             # Add the skip connection
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
-        logits = self.pool(z)
-        bounding_boxes=self.bbox_predictor(z)
-        print(f'logits shape {logits.shape},bounding_boxes {bounding_boxes.shape}')
-        return logits,bounding_boxes
-        # raise NotImplementedError('Detector.forward')
+        return torch.sigmoid(self.classifier(z))
 
     def detect(self, image):
         """
@@ -148,32 +117,27 @@ class Detector(torch.nn.Module):
                  scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
                  out of memory.
         """
-        detections = [[], [], []]  # List of detections per class
+        output = self.forward(image)
+        detections = [[], [], []]
+        for i in range(output.size(1)):
+            channel_heatmap = output[0, i, :, :]
+            channel_detections = extract_peak(channel_heatmap)
 
-        # Convert image to heatmap
-
-        # Iterate over each channel in the heatmap
-        for channel in range(3):
-            # Apply extract_peak to get peaks for each
-
-            peaks = self.extract_peak(image[channel])
-
-            # Iterate over each peak and add it to the corresponding class list
-            for score, cx, cy in peaks:
+            # Format the detections as (score, cx, cy, w/2, h/2)
+            for score, cx, cy in channel_detections:
                 # Set w=0, h=0 as object size is not predicted
                 w = 0
                 h = 0
 
                 # Add the detection to the corresponding class list
-                detections[channel].append((score, cx, cy, w, h))
+                detections[i].append((score, cx, cy, w, h))
 
                 # Limit the number of detections to 30 per image per class
-                if len(detections[channel]) >= 30:
+                if len(detections[i]) >= 30:
                     break
 
         return detections
         # raise NotImplementedError('Detector.detect')
-
 
 def save_model(model):
     from torch import save

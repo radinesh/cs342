@@ -1,20 +1,13 @@
 from PIL import Image
-import torch
 from torch.utils.data import Dataset, DataLoader
-from . import dense_transforms
-
-
-# import numpy as np
-
+from . import dense_transforms  # --original code changed it back when trying to push to git
+# import dense_transforms
 
 class DetectionSuperTuxDataset(Dataset):
     def __init__(self, dataset_path, transform=dense_transforms.ToTensor(), min_size=20):
         from glob import glob
         from os import path
         self.files = []
-        # self.kart_counts = []
-        # self.bombs_counts = []
-        # self.pickup_counts = []
         for im_f in glob(path.join(dataset_path, '*_im.jpg')):
             self.files.append(im_f.replace('_im.jpg', ''))
         self.transform = transform
@@ -23,16 +16,7 @@ class DetectionSuperTuxDataset(Dataset):
     def _filter(self, boxes):
         if len(boxes) == 0:
             return boxes
-        filtered_boxes = boxes[abs(boxes[:, 3] - boxes[:, 1]) * abs(boxes[:, 2] - boxes[:, 0]) >= self.min_size]
-        # Count filtered items
-        # kart_count = np.count_nonzero(filtered_boxes[:, 0])
-        # bombs_count = np.count_nonzero(filtered_boxes[:, 1])
-        # pickup_count = np.count_nonzero(filtered_boxes[:, 2])
-
-        # self.kart_counts.append(kart_count)
-        # self.bombs_counts.append(bombs_count)
-        # self.pickup_counts.append(pickup_count)
-        return filtered_boxes
+        return boxes[abs(boxes[:, 3] - boxes[:, 1]) * abs(boxes[:, 2] - boxes[:, 0]) >= self.min_size]
 
     def __len__(self):
         return len(self.files)
@@ -40,168 +24,29 @@ class DetectionSuperTuxDataset(Dataset):
     def __getitem__(self, idx):
         import numpy as np
         b = self.files[idx]
-        # (f'image Name {b}')
         im = Image.open(b + '_im.jpg')
         nfo = np.load(b + '_boxes.npz')
-        kart = nfo['karts']
-        # print(f'kart {kart }')
         data = im, self._filter(nfo['karts']), self._filter(nfo['bombs']), self._filter(nfo['pickup'])
-        # print(f'data {data}')
         if self.transform is not None:
             data = self.transform(*data)
         return data
 
-    '''def get_counts(self):
-        return {
-            'kart': sum(self.kart_counts),
-            'bombs': sum(self.bombs_counts),
-            'pickup': sum(self.pickup_counts)
-        }
-    '''
 
-
-def load_detection_data(dataset_path, num_workers=0, batch_size=32, **kwargs):
+def load_detection_data(dataset_path, num_workers=0, batch_size=2, **kwargs):
     dataset = DetectionSuperTuxDataset(dataset_path, **kwargs)
     return DataLoader(dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True, drop_last=True)
-
-def get_pos_weight_from_data():
-    label_counts = {'kart': 31836, 'bombs': 33091, 'pickup': 33178}
-
-    total_samples = sum(label_counts.values())
-
-    # Step 3: Calculate inverse class frequencies
-    inverse_kart = total_samples / label_counts['kart']
-    inverse_bombs = total_samples / label_counts['bombs']
-    inverse_pickup = total_samples / label_counts['pickup']
-
-    # Step 4: Normalize inverse class frequencies
-    max_inverse = max(inverse_kart, inverse_bombs, inverse_pickup)
-    weight_kart = inverse_kart / max_inverse
-    weight_bombs = inverse_bombs / max_inverse
-    weight_pickup = inverse_pickup / max_inverse
-
-    # Step 5: Convert weights to tensor format
-    weights = torch.tensor([weight_kart, weight_bombs, weight_pickup], dtype=torch.float)
-    print(f'weight {weights}')
-    return weights
-
-
-class ConfusionMatrix(object):
-    def _make(self, preds, labels):
-        label_range = torch.arange(self.size, device=preds.device)[None, :]
-        preds_one_hot, labels_one_hot = _one_hot(preds, self.size), _one_hot(labels, self.size)
-        return (labels_one_hot[:, :, None] * preds_one_hot[:, None, :]).sum(dim=0).detach()
-
-    def __init__(self, size=5):
-        """
-        This class builds and updates a confusion matrix.
-        :param size: the number of classes to consider
-        """
-        self.matrix = torch.zeros(size, size)
-        self.size = size
-
-    def add(self, preds, labels):
-        """
-        Updates the confusion matrix using predictions `preds` (e.g. logit.argmax(1)) and ground truth `labels`
-        """
-        self.matrix = self.matrix.to(preds.device)
-        self.matrix += self._make(preds, labels).float()
-
-    @property
-    def class_iou(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos / (self.matrix.sum(0) + self.matrix.sum(1) - true_pos + 1e-5)
-
-    @property
-    def iou(self):
-        return self.class_iou.mean()
-
-    @property
-    def global_accuracy(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos.sum() / (self.matrix.sum() + 1e-5)
-
-    @property
-    def class_accuracy(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos / (self.matrix.sum(1) + 1e-5)
-
-    @property
-    def average_accuracy(self):
-        return self.class_accuracy.mean()
-
-    @property
-    def per_class(self):
-        return self.matrix / (self.matrix.sum(1, keepdims=True) + 1e-5)
-
-
-class ConfusionMatrix(object):
-    def _make(self, preds, labels):
-        label_range = torch.arange(self.size, device=preds.device)[None, :]
-        preds_one_hot, labels_one_hot = _one_hot(preds, self.size), _one_hot(labels, self.size)
-        return (labels_one_hot[:, :, None] * preds_one_hot[:, None, :]).sum(dim=0).detach()
-
-    def __init__(self, size=5):
-        """
-        This class builds and updates a confusion matrix.
-        :param size: the number of classes to consider
-        """
-        self.matrix = torch.zeros(size, size)
-        self.size = size
-
-    def add(self, preds, labels):
-        """
-        Updates the confusion matrix using predictions `preds` (e.g. logit.argmax(1)) and ground truth `labels`
-        """
-        self.matrix = self.matrix.to(preds.device)
-        self.matrix += self._make(preds, labels).float()
-
-    @property
-    def class_iou(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos / (self.matrix.sum(0) + self.matrix.sum(1) - true_pos + 1e-5)
-
-    @property
-    def iou(self):
-        return self.class_iou.mean()
-
-    @property
-    def global_accuracy(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos.sum() / (self.matrix.sum() + 1e-5)
-
-    @property
-    def class_accuracy(self):
-        true_pos = self.matrix.diagonal()
-        return true_pos / (self.matrix.sum(1) + 1e-5)
-
-    @property
-    def average_accuracy(self):
-        return self.class_accuracy.mean()
-
-    @property
-    def per_class(self):
-        return self.matrix / (self.matrix.sum(1, keepdims=True) + 1e-5)
 
 
 if __name__ == '__main__':
     dataset = DetectionSuperTuxDataset('dense_data/train')
-    '''for i in range(len(dataset)):
-        data = dataset[i]
-        # print(f'data {data}') '''
-
     import torchvision.transforms.functional as F
     from pylab import show, subplots
     import matplotlib.patches as patches
     import numpy as np
 
-    weight = get_pos_weight_from_data()
-    # counts = dataset.get_counts()
-    # print(counts)
-
     fig, axs = subplots(1, 2)
     for i, ax in enumerate(axs.flat):
-        im, kart, bomb, pickup = dataset[100 + i]
+        im, kart, bomb, pickup = dataset[100+i]
         ax.imshow(F.to_pil_image(im), interpolation=None)
         for k in kart:
             ax.add_patch(
@@ -221,15 +66,12 @@ if __name__ == '__main__':
 
     fig, axs = subplots(1, 2)
     for i, ax in enumerate(axs.flat):
-        # print(f'i= {i}')
-        im, *dets = dataset[100 + i]
-        for s in range(3):
-            imc = im[s]
-        # print(f' at s {s} im {imc.shape}')
+
+        im, *dets = dataset[100+i]
         hm, size = dense_transforms.detections_to_heatmap(dets, im.shape[1:])
         ax.imshow(F.to_pil_image(im), interpolation=None)
         hm = hm.numpy().transpose([1, 2, 0])
-        alpha = 0.25 * hm.max(axis=2) + 0.75
+        alpha = 0.25*hm.max(axis=2) + 0.75
         r = 1 - np.maximum(hm[:, :, 1], hm[:, :, 2])
         g = 1 - np.maximum(hm[:, :, 0], hm[:, :, 2])
         b = 1 - np.maximum(hm[:, :, 0], hm[:, :, 1])
@@ -237,4 +79,5 @@ if __name__ == '__main__':
         ax.axis('off')
     fig.tight_layout()
     # fig.savefig('heat.png', bbox_inches='tight', pad_inches=0, transparent=True)
+
     show()
