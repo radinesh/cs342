@@ -32,7 +32,7 @@ class DetectionSuperTuxDataset(Dataset):
         return data
 
 
-def load_detection_data(dataset_path, num_workers=0, batch_size=2, **kwargs):
+def load_detection_data(dataset_path, num_workers=0, batch_size=35, **kwargs):
     dataset = DetectionSuperTuxDataset(dataset_path, **kwargs)
     return DataLoader(dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True, drop_last=True)
 

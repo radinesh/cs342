@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .models import Detector, save_model
+from .models import Detector, save_model, total_loss
 from .utils import load_detection_data
 from . import dense_transforms  # --uncomment when submitting the project
 
@@ -16,6 +16,7 @@ def train(args):
     from os import path
     model = Detector()
     train_logger, valid_logger = None, None
+    loss = total_loss
     if args.log_dir is not None:
         train_logger = tb.SummaryWriter(path.join(args.log_dir, 'train'), flush_secs=1)
         valid_logger = tb.SummaryWriter(path.join(args.log_dir, 'valid'), flush_secs=1)
@@ -33,45 +34,53 @@ def train(args):
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-3)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
     # w = get_pos_weight_from_data()
-    loss = torch.nn.BCEWithLogitsLoss()
-    # raise NotImplementedError('train')
+    # Define the custom Focal Loss function
+
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
-    train_data = load_detection_data('dense_data/train', num_workers=0, transform=transform)
-    valid_data = load_detection_data('dense_data/valid', num_workers=0)
+    train_data = load_detection_data('dense_data/train', num_workers=4, transform=transform)
+    valid_data = load_detection_data('dense_data/valid', num_workers=4)
     global_step = 0
     for epoch in range(args.num_epoch):
         print("Going to process epoch: ", epoch)
-        if 1 <= epoch <= 100:
-            optimizer.param_groups[0]['lr'] = 0.01  # High learning rate for GT detect loss
-        elif 100 < epoch <= 120:
-            optimizer.param_groups[0]['lr'] = 0.001  # Low learning rate for GT size loss
-
         model.train()
         print("before start fetching the data")
         for data in train_data:
-            print("going to batch loop..........")
-            print("going to batch loop..........img size ", data[0].shape)
-            logit = model(data[0])
-            print(f'logit.shape {logit.shape} and gt_detect.shape {data[1].shape} gt_size shape {data[2].shape}')
-            loss_val = loss(logit, data[1])
-            # Calculate loss based on the condition
-            '''if epoch <= 100:
-                loss_val = loss(logit[0], data[1])
-            else:
-                loss_val = loss(logit, data[2])
-            if train_logger is not None and global_step % 100 == 0:
-                log(train_logger, data[0], data[1], logit, global_step)
-
-            if train_logger is not None:
-                train_logger.add_scalar('loss', loss_val, global_step)'''
+            img = data[0].to(device)
+            gt = data[1].to(device)
+            st = data[2].to(device)
+            # Get predicted heatmap and size from the model
+            predicted_heatmap, predicted_size = model(img)
+            # Calculate total loss using the custom loss function
+            loss_val = loss(predicted_heatmap, predicted_size, gt, st)
             optimizer.zero_grad()
             loss_val.backward()
             optimizer.step()
             global_step += 1
 
-        save_model(model)
+            if train_logger:
+                train_logger.add_scalar('global_loss', loss_val, global_step)
+                log(train_logger, img, gt, loss_val, global_step)
+                # train_logger.add_scalar('average_accuracy', conf.average_accuracy, global_step)
+                # train_logger.add_scalar('iou', conf.iou, global_step)
 
+        ''' model.eval()
+            for vdata in valid_data:
+                img = vdata[0].to(device)
+                gt = vdata[1].to(device)
+                st = vdata[2].to(device)
+                # Get predicted heatmap and size from the model
+                predicted_heatmap, predicted_size = model(img)
+
+            if valid_logger:
+                valid_logger.add_scalar('global_accuracy', val_conf.global_accuracy, global_step)
+                valid_logger.add_scalar('average_accuracy', val_conf.average_accuracy, global_step)
+                valid_logger.add_scalar('iou', val_conf.iou, global_step)
+
+            if valid_logger is None or train_logger is None:
+                print('epoch %-3d \t acc = %0.3f \t val acc = %0.3f \t iou = %0.3f \t val iou = %0.3f' %
+                      (epoch, conf.global_accuracy, val_conf.global_accuracy, conf.iou, val_conf.iou))
+            save_model(model) '''
 
 def log(logger, imgs, gt_det, det, global_step):
     """
@@ -93,8 +102,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--log_dir', type=str, default='./dthLogs')
     # Put custom arguments here
-    parser.add_argument('-n', '--num_epoch', type=int, default=2)
-    parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3)
+    parser.add_argument('-n', '--num_epoch', type=int, default=110)
+    parser.add_argument('-lr', '--learning_rate', type=float, default=.09)
     parser.add_argument('-g', '--gamma', type=float, default=0, help="class dependent weight for cross entropy")
     parser.add_argument('-c', '--continue_training', action='store_true')
     parser.add_argument('-t', '--transform',

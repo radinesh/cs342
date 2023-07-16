@@ -40,9 +40,47 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
 
     return peaks
     # raise NotImplementedError('extract_peak')
-    # raise NotImplementedError('extract_peak')
 
 
+class FocalLoss(torch.nn.Module):
+    def __init__(self, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+
+    def forward(self, input, target):
+        pt = torch.sigmoid(input)
+        loss = -((1 - pt) ** self.gamma) * target * torch.log(pt) - (pt ** self.gamma) * (1 - target) * torch.log(
+            1 - pt)
+        return loss.mean()
+
+
+def custom_regression_loss(predicted_size, gt_size):
+    return F.smooth_l1_loss(predicted_size, gt_size)
+
+
+def total_loss(heatmap_output, size, gt_heatmap, gt_size, w1=0.8, w2=0.2):
+    # Calculate Focal Loss for heatmap prediction
+    criterion_heatmap = FocalLoss()
+
+    # Calculate regression loss for size prediction
+    criterion_regression = torch.nn.MSELoss()
+
+    # Calculate heatmap loss and size loss separately
+    heatmap_loss = criterion_heatmap(heatmap_output, gt_heatmap)
+    size_loss = criterion_regression(size, gt_size)
+
+    # Calculate the total loss using the specified weights
+    total_loss = w1 * heatmap_loss + w2 * size_loss
+
+    return total_loss
+
+
+# Example usage:
+# Assuming you have the predicted_heatmap_output, predicted_size,
+# ground_truth_heatmap, and ground_truth_size tensors
+
+# Calculate the total loss using the custom loss function
+# loss = total_loss(predicted_heatmap_output, predicted_size, ground_truth_heatmap, ground_truth_size, w1=1.0, w2=1.0)
 class Detector(torch.nn.Module):
     class Block(torch.nn.Module):
         def __init__(self, n_input, n_output, kernel_size=3, stride=2):
@@ -85,7 +123,12 @@ class Detector(torch.nn.Module):
             c = l
             if self.use_skip:
                 c += skip_layer_size[i]
-        self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
+                # Create separate classifiers for each object class (kart, bomb, pickup)
+        self.kart_classifier = torch.nn.Conv2d(c, 1, 1)
+        self.bomb_classifier = torch.nn.Conv2d(c, 1, 1)
+        self.pickup_classifier = torch.nn.Conv2d(c, 1, 1)
+        self.size_predictor = torch.nn.Conv2d(c, 2, kernel_size=1)
+                # self.pickup_classifier = torch.nn.Conv2d(c, n_output, 1)
 
     def forward(self, x):
         z = (x - self.input_mean[None, :, None, None].to(x.device)) / self.input_std[None, :, None, None].to(x.device)
@@ -102,7 +145,20 @@ class Detector(torch.nn.Module):
             # Add the skip connection
             if self.use_skip:
                 z = torch.cat([z, up_activation[i]], dim=1)
-        return torch.sigmoid(self.classifier(z))
+            # return torch.sigmoid(self.classifier(z))
+            # Apply separate classifiers for each object class (kart, bomb, pickup)
+        kart_heatmap = torch.sigmoid(self.kart_classifier(z))
+        bomb_heatmap = torch.sigmoid(self.bomb_classifier(z))
+        pickup_heatmap = torch.sigmoid(self.pickup_classifier(z))
+
+        # Reshape the output to (batch_size, 3, height, width)
+        heatmap_output = torch.stack([kart_heatmap.squeeze(), bomb_heatmap.squeeze(), pickup_heatmap.squeeze()],
+                                     dim=1)
+
+        # Calculate size from the heatmap
+        size = self.size_predictor(z)
+        # print (f'heatmap_output {heatmap_output.shape},heatmap_output{size.shape}')
+        return heatmap_output, size
 
     def detect(self, image):
         """
@@ -117,27 +173,28 @@ class Detector(torch.nn.Module):
                  scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
                  out of memory.
         """
-        output = self.forward(image)
+        img = image.to(device)
+        with torch.no_grad():
+            heatmap_output, size_output = self(img)
         detections = [[], [], []]
-        for i in range(output.size(1)):
-            channel_heatmap = output[0, i, :, :]
+        for i in range(heatmap_output.size(1)):
+            channel_heatmap = heatmap_output[0, i, :, :]
             channel_detections = extract_peak(channel_heatmap)
 
             # Format the detections as (score, cx, cy, w/2, h/2)
             for score, cx, cy in channel_detections:
                 # Set w=0, h=0 as object size is not predicted
-                w = 0
-                h = 0
-
+                # Get the predicted size for the detected peak
+                w, h = size_output[0, i, cy, cx].tolist()  # Convert tensor to Python float
                 # Add the detection to the corresponding class list
-                detections[i].append((score, cx, cy, w, h))
-
+                detections[i].append((score, cx, cy, w/2, h/2))
                 # Limit the number of detections to 30 per image per class
                 if len(detections[i]) >= 30:
                     break
 
         return detections
         # raise NotImplementedError('Detector.detect')
+
 
 def save_model(model):
     from torch import save
