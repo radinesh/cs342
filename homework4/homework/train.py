@@ -41,8 +41,9 @@ def train(args):
     train_data = load_detection_data('dense_data/train', num_workers=4, transform=transform)
     valid_data = load_detection_data('dense_data/valid', num_workers=4)
     global_step = 0
+    loss_per_epoc = 100.00
     for epoch in range(args.num_epoch):
-        print("Going to process epoch: ", epoch)
+        print(f'Going to process epoch: {epoch} with loss {loss_per_epoc}')
         model.train()
         print("before start fetching the data")
         for data in train_data:
@@ -53,6 +54,7 @@ def train(args):
             predicted_heatmap, predicted_size = model(img)
             # Calculate total loss using the custom loss function
             loss_val = loss(predicted_heatmap, predicted_size, gt, st)
+            loss_per_epoc=loss_val
             optimizer.zero_grad()
             loss_val.backward()
             optimizer.step()
@@ -63,6 +65,7 @@ def train(args):
                 log(train_logger, img, gt, loss_val, global_step)
                 # train_logger.add_scalar('average_accuracy', conf.average_accuracy, global_step)
                 # train_logger.add_scalar('iou', conf.iou, global_step)
+        save_model(model)
 
         ''' model.eval()
             for vdata in valid_data:
