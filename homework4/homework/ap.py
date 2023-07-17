@@ -4,27 +4,23 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 
 def point_in_box(pred, lbl):
-    print("point_in_box")
     px, py = pred[:, None, 0], pred[:, None, 1]
     x0, y0, x1, y1 = lbl[None, :, 0], lbl[None, :, 1], lbl[None, :, 2], lbl[None, :, 3]
     return (x0 <= px) & (px < x1) & (y0 <= py) & (py < y1)
 
 
 def point_close(pred, lbl, d=5):
-    print("point_close")
     px, py = pred[:, None, 0], pred[:, None, 1]
     x0, y0, x1, y1 = lbl[None, :, 0], lbl[None, :, 1], lbl[None, :, 2], lbl[None, :, 3]
     return ((x0 + x1 - 1) / 2 - px) ** 2 + ((y0 + y1 - 1) / 2 - py) ** 2 < d ** 2
 
 
 def box_iou(pred, lbl, t=0.5):
-    print("box iou...")
     px, py, pw2, ph2 = pred[:, None, 0], pred[:, None, 1], pred[:, None, 2], pred[:, None, 3]
     px0, px1, py0, py1 = px - pw2, px + pw2, py - ph2, py + ph2
     x0, y0, x1, y1 = lbl[None, :, 0], lbl[None, :, 1], lbl[None, :, 2], lbl[None, :, 3]
     iou = (abs(torch.min(px1, x1) - torch.max(px0, x0)) * abs(torch.min(py1, y1) - torch.max(py0, y0))) / \
           (abs(torch.max(px1, x1) - torch.min(px0, x0)) * abs(torch.max(py1, y1) - torch.min(py0, y0)))
-    print("IOU is > .5 and t "  , iou.shape,)
     return iou > t
 
 
@@ -36,7 +32,6 @@ class PR:
         self.is_close = is_close
 
     def add(self, d, lbl):
-        print("Going to add..with lbs")
         lbl = torch.as_tensor(lbl.astype(float), dtype=torch.float32).view(-1, 4)
         d = torch.as_tensor(d, dtype=torch.float32).view(-1, 5)
         all_pair_is_close = self.is_close(d[:, 1:], lbl)
@@ -69,7 +64,6 @@ class PR:
 
     @property
     def curve(self):
-        print("Going to curve....")
         true_pos, false_pos = 0, 0
         r = []
         for t, m in sorted(self.det, reverse=True):

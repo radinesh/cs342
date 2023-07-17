@@ -46,7 +46,7 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
 
 
 class FocalLoss(torch.nn.Module):
-    def __init__(self, gamma=2.0):
+    def __init__(self, gamma=5.0):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
 
@@ -61,21 +61,14 @@ def custom_regression_loss(predicted_size, gt_size):
     return F.smooth_l1_loss(predicted_size, gt_size)
 
 
-def total_loss(heatmap_output, size, gt_heatmap, gt_size, w1=0.8, w2=0.2):
+def total_loss(heatmap_output, gt_heatmap):
     # Calculate Focal Loss for heatmap prediction
     criterion_heatmap = FocalLoss()
 
-    # Calculate regression loss for size prediction
-    criterion_regression = torch.nn.MSELoss()
-
     # Calculate heatmap loss and size loss separately
     heatmap_loss = criterion_heatmap(heatmap_output, gt_heatmap)
-    size_loss = criterion_regression(size, gt_size)
-
     # Calculate the total loss using the specified weights
-    total_loss = w1 * heatmap_loss + w2 * size_loss
-
-    return total_loss
+    return heatmap_loss
 
 
 # Example usage:
@@ -127,11 +120,7 @@ class Detector(torch.nn.Module):
             if self.use_skip:
                 c += skip_layer_size[i]
                 # Create separate classifiers for each object class (kart, bomb, pickup)
-        self.kart_classifier = torch.nn.Conv2d(c, 1, 1)
-        self.bomb_classifier = torch.nn.Conv2d(c, 1, 1)
-        self.pickup_classifier = torch.nn.Conv2d(c, 1, 1)
-        self.size_predictor = torch.nn.Conv2d(c, 2, kernel_size=1)
-                # self.pickup_classifier = torch.nn.Conv2d(c, n_output, 1)
+        self.classifier = torch.nn.Conv2d(c, n_output_channels, 1)
 
     def forward(self, x):
         z = (x - self.input_mean[None, :, None, None].to(x.device)) / self.input_std[None, :, None, None].to(x.device)
@@ -150,62 +139,12 @@ class Detector(torch.nn.Module):
                 z = torch.cat([z, up_activation[i]], dim=1)
             # return torch.sigmoid(self.classifier(z))
             # Apply separate classifiers for each object class (kart, bomb, pickup)
-        kart_heatmap = torch.sigmoid(self.kart_classifier(z))
-        bomb_heatmap = torch.sigmoid(self.bomb_classifier(z))
-        pickup_heatmap = torch.sigmoid(self.pickup_classifier(z))
-
-        # Reshape the output to (batch_size, 3, height, width)
-        # heatmap_output = torch.stack([kart_heatmap.squeeze(), bomb_heatmap.squeeze(), pickup_heatmap.squeeze()],dim=1)
-        heatmap_output = torch.cat([kart_heatmap, bomb_heatmap, pickup_heatmap], dim=1)
-        # Calculate size from the heatmap
-        size = self.size_predictor(z)
+        heatmap = self.classifier(z)
         # print (f'heatmap_output {heatmap_output.shape},size {size.shape}')
-        return heatmap_output, size
+        return heatmap
 
-    '''def detect(self, image):
-        """
-           Your code here.
-           Implement object detection here.
-           @image: 3 x H x W image
-           @return: Three list of detections [(score, cx, cy, w/2, h/2), ...], one per class,
-                    return no more than 30 detections per image per class. You only need to predict width and height
-                    for extra credit. If you do not predict an object size, return w=0, h=0.
-           Hint: Use extract_peak here
-           Hint: Make sure to return three python lists of tuples of (float, int, int, float, float) and not a pytorch
-                 scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
-                 out of memory.
-        """
-        img = image.to(device)
-        print(f'image shape {img.shape}')
-        self = self.to(device)
-        with torch.no_grad():
-            heatmap_output, size_output = self(img)
-            print(f'img predecion size {heatmap_output.shape}')
-            print(f'size predecion size {size_output.shape}')
-        detections = [[], [], []]
-        for i in range(3):
-            channel_heatmap = heatmap_output[0, i, :, :]
-            print(f'channel_heatmap  shape {channel_heatmap.shape}')
-            channel_detections = extract_peak(channel_heatmap)
-            print(f'going to loop over range')
-            # Format the detections as (score, cx, cy, w/2, h/2)
-            for score, cx, cy in channel_detections:
-                # Set w=0, h=0 as object size is not predicted
-                # Get the predicted size for the detected peak
-              if 0 <= cx < size_output.size(3) and 0 <= cy < size_output.size(2):
-                w, h = size_output[0, i, cy, cx].tolist()  # Convert tensor to Python float
-              else:
-                w, h = 0, 0  # If the peak is outside the size_output tensor, set w=0, h=0
-
-            # Add the detection to the corresponding class list
-              detections[i].append((score, cx, cy, w / 2, h / 2))
-            # Limit the number of detections to 30 per image per class
-              if len(detections[i]) >= 30:
-                break
-
-        return detections '''
     def detect(self, image):
-      """
+        """
     Implement object detection here.
 
     @image: 3 x H x W image
@@ -218,38 +157,27 @@ class Detector(torch.nn.Module):
           scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
           out of memory.
     """
-      img = image.to(device)
-      dl = self.eval().to(device)
-      with torch.no_grad():
-        heatmap_output, size_output = dl(img)
-        # print("size item shape" ,size_output.shape )
+        img = image.to(device)
+        dl = self.eval().to(device)
+        with torch.no_grad():
+            heatmap_output = dl(img)
+            # print("size item shape" ,size_output.shape )
 
-      detections = [[], [], []]
-      for i in range(3):
-        channel_heatmap = heatmap_output[0, i, :, :]
-        channel_detections = extract_peak(channel_heatmap)
+        detections = [[], [], []]
+        for i in range(3):
+            channel_heatmap = heatmap_output[0, i, :, :]
+            channel_detections = extract_peak(channel_heatmap)
 
-        # Format the detections as (score, cx, cy, w/2, h/2)
-        # Format the detections as (score, cx, cy, w/2, h/2)
-        for score, cx, cy in channel_detections:
-            # Get the predicted size for the detected peak
-            size = size_output.squeeze()  # Remove singleton dimensions if any
-            if size.dim() == 0:
-                # Handle the case when size_output is a scalar (Python float)
+            # Format the detections as (score, cx, cy, w/2, h/2)
+            # Format the detections as (score, cx, cy, w/2, h/2)
+            for score, cx, cy in channel_detections:
+                # Get the predicted size for the detected peak
                 w, h = 0.0, 0.0
-            else:
-                # Convert size_output[0, 0, cy, cx] and size_output[0, 1, cy, cx] to Python floats
-                w = float(size[0, cy, cx]) if size.size(0) > 0 else 0.0
-                h = float(size[1, cy, cx]) if size.size(0) > 1 else 0.0
-            # Add the detection to the corresponding class list
-            # print("w and h",w,h)
-            detections[i].append((float(score), int(cx), int(cy), w / 2, h / 2))
-            # Limit the number of detections to 30 per image per class
-            if len(detections[i]) >= 30:
-                break
-
-      return detections
-
+                detections[i].append((float(score), int(cx), int(cy), w / 2, h / 2))
+                # Limit the number of detections to 30 per image per class
+                if len(detections[i]) >= 30:
+                    break
+        return detections
 
         # raise NotImplementedError('Detector.detect')
 
