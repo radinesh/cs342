@@ -46,7 +46,7 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
 
 
 class FocalLoss(torch.nn.Module):
-    def __init__(self, gamma=5.0):
+    def __init__(self, gamma=4.0):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
 

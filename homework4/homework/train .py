@@ -65,6 +65,7 @@ def train(args):
     global_step = 0
     min_loss = float('inf')
     ave_loss = float('inf')
+    v_ap_high = [0.0, 0.0, 0.0]
     v_itr = 0
     for epoch in range(args.num_epoch):
         loss_per_epoc = 0.0
@@ -78,7 +79,7 @@ def train(args):
             # Get predicted heatmap and size from the model
             predicted_heatmap = model(img)
             # Calculate total loss using the custom loss function
-            loss_val = loss(predicted_heatmap,gt)
+            loss_val = loss(predicted_heatmap, gt)
             loss_per_epoc = loss_per_epoc + loss_val.item()
             optimizer.zero_grad()
             loss_val.backward()
@@ -98,15 +99,24 @@ def train(args):
                 print(f'AP for Size is  {ap_d}')
                 print(f'AP for IOU is  {ap_iou}')
                 v_itr = 0
-                if ap[0] > 0.7:
-                    print(f'saving model with ap {ap}')
+                print(f'model with ap at {ap}')
+                if ap[0] > v_ap_high[0]:
+                    v_ap_high[0] = ap[0]
+                    print(f'saving model with ap at 0 {v_ap_high[0]}')
                     save_model(model)
-        v_itr = v_itr+1
+                if ap[1] > v_ap_high[1]:
+                    v_ap_high[1] = ap[1]
+                    print(f'saving model with ap at 1 {v_ap_high[1]}')
+                    save_model(model)
+                if ap[2] > v_ap_high[2]:
+                    v_ap_high[2] = ap[2]
+                    print(f'saving model with ap at 0 {v_ap_high[2]}')
+                    save_model(model)
+        v_itr = v_itr + 1
         if min_loss > ave_loss:
             min_loss = ave_loss
             print(f'saving model with min_loss {min_loss}')
             save_model(model)
-
 
 
 def log(logger, imgs, gt_det, det, global_step):
@@ -129,8 +139,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--log_dir', type=str, default='./dthLogs')
     # Put custom arguments here
-    parser.add_argument('-n', '--num_epoch', type=int, default=120)
-    parser.add_argument('-b', '--batch_size', type=int, default=55)
+    parser.add_argument('-n', '--num_epoch', type=int, default=100)
+    parser.add_argument('-b', '--batch_size', type=int, default=45)
     parser.add_argument('-lr', '--learning_rate', type=float, default=.01)
     parser.add_argument('-g', '--gamma', type=float, default=0, help="class dependent weight for cross entropy")
     parser.add_argument('-c', '--continue_training', action='store_true')
