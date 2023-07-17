@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -18,6 +19,8 @@ def extract_peak(heatmap, max_pool_ks=7, min_score=-5, max_det=100):
     heatmap_tensor = heatmap[None, None]
     pooled = F.max_pool2d(heatmap_tensor, kernel_size=max_pool_ks, stride=1, padding=max_pool_ks // 2)
     maxima = (heatmap == pooled) & (heatmap > min_score)
+    if not maxima.any():
+        return []
     # Find the coordinates of the local maxima
     maxima_2d = maxima.squeeze().nonzero(as_tuple=False)
     scores = heatmap[maxima_2d[:, 0], maxima_2d[:, 1]]
@@ -152,15 +155,14 @@ class Detector(torch.nn.Module):
         pickup_heatmap = torch.sigmoid(self.pickup_classifier(z))
 
         # Reshape the output to (batch_size, 3, height, width)
-        heatmap_output = torch.stack([kart_heatmap.squeeze(), bomb_heatmap.squeeze(), pickup_heatmap.squeeze()],
-                                     dim=1)
-
+        # heatmap_output = torch.stack([kart_heatmap.squeeze(), bomb_heatmap.squeeze(), pickup_heatmap.squeeze()],dim=1)
+        heatmap_output = torch.cat([kart_heatmap, bomb_heatmap, pickup_heatmap], dim=1)
         # Calculate size from the heatmap
         size = self.size_predictor(z)
-        # print (f'heatmap_output {heatmap_output.shape},heatmap_output{size.shape}')
+        # print (f'heatmap_output {heatmap_output.shape},size {size.shape}')
         return heatmap_output, size
 
-    def detect(self, image):
+    '''def detect(self, image):
         """
            Your code here.
            Implement object detection here.
@@ -174,25 +176,81 @@ class Detector(torch.nn.Module):
                  out of memory.
         """
         img = image.to(device)
+        print(f'image shape {img.shape}')
+        self = self.to(device)
         with torch.no_grad():
             heatmap_output, size_output = self(img)
+            print(f'img predecion size {heatmap_output.shape}')
+            print(f'size predecion size {size_output.shape}')
         detections = [[], [], []]
-        for i in range(heatmap_output.size(1)):
+        for i in range(3):
             channel_heatmap = heatmap_output[0, i, :, :]
+            print(f'channel_heatmap  shape {channel_heatmap.shape}')
             channel_detections = extract_peak(channel_heatmap)
-
+            print(f'going to loop over range')
             # Format the detections as (score, cx, cy, w/2, h/2)
             for score, cx, cy in channel_detections:
                 # Set w=0, h=0 as object size is not predicted
                 # Get the predicted size for the detected peak
+              if 0 <= cx < size_output.size(3) and 0 <= cy < size_output.size(2):
                 w, h = size_output[0, i, cy, cx].tolist()  # Convert tensor to Python float
-                # Add the detection to the corresponding class list
-                detections[i].append((score, cx, cy, w/2, h/2))
-                # Limit the number of detections to 30 per image per class
-                if len(detections[i]) >= 30:
-                    break
+              else:
+                w, h = 0, 0  # If the peak is outside the size_output tensor, set w=0, h=0
 
-        return detections
+            # Add the detection to the corresponding class list
+              detections[i].append((score, cx, cy, w / 2, h / 2))
+            # Limit the number of detections to 30 per image per class
+              if len(detections[i]) >= 30:
+                break
+
+        return detections '''
+    def detect(self, image):
+      """
+    Implement object detection here.
+
+    @image: 3 x H x W image
+    @return: Three lists of detections [(score, cx, cy, w/2, h/2), ...], one per class,
+             return no more than 30 detections per image per class. You only need to predict width and height
+             for extra credit. If you do not predict an object size, return w=0, h=0.
+
+    Hint: Use extract_peak here
+    Hint: Make sure to return three python lists of tuples of (float, int, int, float, float) and not a pytorch
+          scalar. Otherwise pytorch might keep a computation graph in the background and your program will run
+          out of memory.
+    """
+      img = image.to(device)
+      dl = self.eval().to(device)
+      with torch.no_grad():
+        heatmap_output, size_output = dl(img)
+        # print("size item shape" ,size_output.shape )
+
+      detections = [[], [], []]
+      for i in range(3):
+        channel_heatmap = heatmap_output[0, i, :, :]
+        channel_detections = extract_peak(channel_heatmap)
+
+        # Format the detections as (score, cx, cy, w/2, h/2)
+        # Format the detections as (score, cx, cy, w/2, h/2)
+        for score, cx, cy in channel_detections:
+            # Get the predicted size for the detected peak
+            size = size_output.squeeze()  # Remove singleton dimensions if any
+            if size.dim() == 0:
+                # Handle the case when size_output is a scalar (Python float)
+                w, h = 0.0, 0.0
+            else:
+                # Convert size_output[0, 0, cy, cx] and size_output[0, 1, cy, cx] to Python floats
+                w = float(size[0, cy, cx]) if size.size(0) > 0 else 0.0
+                h = float(size[1, cy, cx]) if size.size(0) > 1 else 0.0
+            # Add the detection to the corresponding class list
+            # print("w and h",w,h)
+            detections[i].append((float(score), int(cx), int(cy), w / 2, h / 2))
+            # Limit the number of detections to 30 per image per class
+            if len(detections[i]) >= 30:
+                break
+
+      return detections
+
+
         # raise NotImplementedError('Detector.detect')
 
 
