@@ -1,4 +1,4 @@
-name: dl_hw_04
+name: dl_hw_05
 channels:
   - pytorch
   - defaults
@@ -10,3 +10,4 @@ dependencies:
 - "torchvision>=0.7.0"
 - "tensorboard>=1.14"
 - future
+- PySuperTuxKart

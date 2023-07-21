@@ -191,7 +191,7 @@ def load_assignment(name, f_out=sys.stdout, pre_import_fn=None):
             return importlib.import_module(module)
         except ModuleNotFoundError as e:
            print('Import error "%s"'%str(e), file=f_out)
-        except e:
+        except Exception as e:
            print('Failed to load your solution: "%s"'%str(e), file=f_out)
 
 
