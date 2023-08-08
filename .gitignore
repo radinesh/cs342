@@ -10,12 +10,10 @@ ehthumbs.db
 Thumbs.db
 .idea
 */homework/__pycache__
-*/grader/__pycache__
-*/data/
+*/grader/__pycache__/
 */cnnLogs/
 */fcnLogs/
 */dense_data/
-*/grader/__pycache__/
 */homework/__pycache__/
 */DK28744.zip
 */plogs
